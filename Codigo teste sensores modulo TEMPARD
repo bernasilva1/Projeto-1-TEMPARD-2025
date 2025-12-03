@@ -1,0 +1,98 @@
+//#include <dummy.h>
+#include <Adafruit_NeoPixel.h>
+
+#include <Arduino.h>
+#include <DHT.h>
+///#include <ESP32Servo.h>
+
+//#include<LiquidCrystal.h>
+
+//LiquidCrystal lcd(7, 6, 5, 4, 3, 2);
+//unsigned long lastUpdate;
+
+#define DHTPIN 4  // Change this to the GPIO pin where your sensor is connected
+#define DHTTYPE DHT11  // Change to DHT11 if using that model
+//#define PIN_SERVO 13
+
+#define LED_PIN 8 //GPIO Pin 8
+#define NUM_LEDS 1
+Adafruit_NeoPixel rgbLed(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
+
+
+
+
+//Servo myServo;
+
+DHT dht(DHTPIN, DHTTYPE);
+
+void setup() {
+    Serial.begin(115200);
+    Serial.println("DHT Sensor Test");
+    dht.begin();
+
+    pinMode(LED_BUILTIN, OUTPUT);
+    digitalWrite(LED_BUILTIN, LOW);
+
+
+    /*
+    lcd.begin(16, 2);
+    lcd.setCursor(3,0);
+    lcd.print("A inicializar ...");
+    lastUpdate = millis();
+    */
+    delay(1500);
+    rgbLed.begin();
+    rgbLed.setPixelColor(0, rgbLed.Color(0, 0, 0)); 
+    //lcd.clear();
+
+  //myServo.attach(PIN_SERVO);
+
+}
+
+void loop() {
+    float humidity = dht.readHumidity();
+    float temperature = dht.readTemperature(); // Celsius
+    float temperatureF = dht.readTemperature(true); // Fahrenheit
+
+    if (isnan(humidity) || isnan(temperature) || isnan(temperatureF)) {
+        /*
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Failed to read from DHT sensor!");
+        */
+        Serial.println("Failed to read from DHT sensor!");
+        delay(2000);
+        return;
+    }
+    
+    /*
+    for(int pos=0;pos<=180;pos){}
+    
+    }
+    */
+
+    // mostra leituras no serial monitor
+    Serial.print("Humidity: ");
+    Serial.print(humidity);
+    Serial.print("%  Temperature: ");
+    Serial.print(temperature);
+    Serial.print("°C  ");
+    Serial.print(temperatureF);
+    Serial.println("°F");
+
+    /*
+    // Mostrar no LCD 
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Temp: ");
+    lcd.print(temperature);
+    lcd.print("C");
+    lcd.setCursor(0, 1);
+    lcd.print("Hum:  ");
+    lcd.print(humidity);
+    lcd.print("%");
+  */
+
+    delay(2000);  // Wait for 2 seconds before next reading
+}
+
