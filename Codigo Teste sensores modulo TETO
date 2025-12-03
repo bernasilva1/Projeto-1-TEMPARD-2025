@@ -1,0 +1,117 @@
+#include <Arduino.h>
+#include <Adafruit_NeoPixel.h> 
+
+// --- PINOS---
+#define LED_PIN    8
+#define NUM_PIXELS 1
+#define PIR_PIN    4
+#define BUTTON_PIN 3
+
+Adafruit_NeoPixel rgbLed(NUM_PIXELS, LED_PIN, NEO_GRB + NEO_KHZ800);
+
+enum STATE_ENUM {
+  OFF,
+  ON,
+  AUTO
+} system_state;
+
+// Variáveis do botão
+int buttonState;
+int lastButtonState = HIGH;
+unsigned long lastDebounceTime = 0;
+const unsigned long debounceDelay = 50;
+
+// Timer AUTO
+unsigned long autoOffTimer = 0;
+const unsigned long autoTimeout = 2000;
+
+// --- Função de debounce ---
+bool buttonPressed() {
+  int reading = digitalRead(BUTTON_PIN);
+  bool pressed = false;
+
+  if (reading != lastButtonState) {
+    lastDebounceTime = millis();
+  }
+
+  if ((millis() - lastDebounceTime) > debounceDelay) {
+    if (reading != buttonState) {
+      buttonState = reading;
+      if (buttonState == LOW) {
+        pressed = true;
+      }
+    }
+  }
+
+  lastButtonState = reading;
+  return pressed;
+}
+
+// --- SETUP ---
+void setup() {
+  Serial.begin(115200);
+
+  rgbLed.begin();
+  rgbLed.setPixelColor(0, rgbLed.Color(0,0,0));
+  rgbLed.show();
+
+  pinMode(PIR_PIN, INPUT);
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+
+  buttonState = digitalRead(BUTTON_PIN);
+  lastButtonState = buttonState;
+
+  system_state = OFF;
+
+  Serial.println("Sistema iniciado. Modo inicial: OFF.");
+}
+
+void loop() {
+
+  // Detecta mudança de modo
+  if (buttonPressed()) {
+    system_state = (STATE_ENUM)((system_state + 1) % 3);  // Vai trocando OFF→ON→AUTO→OFF
+    autoOffTimer = 0;
+
+    Serial.print("Modo alterado para: ");
+    if (system_state == OFF)  Serial.println("OFF");
+    if (system_state == ON)   Serial.println("ON");
+    if (system_state == AUTO) Serial.println("AUTO");
+  }
+
+  switch (system_state) {
+
+    // --- MODO OFF ---
+    case OFF:
+      rgbLed.setPixelColor(0, rgbLed.Color(0,0,0)); // Mantem desligado o LED rbg 
+      rgbLed.show(); 
+      break;
+
+    // --- MODO ON ---
+    case ON:
+      rgbLed.setPixelColor(0, rgbLed.Color(255,255,255)); // Liga o LED rbg
+      rgbLed.show();
+      break;
+
+    // --- MODO AUTO ---
+    case AUTO: {
+      int pirState = digitalRead(PIR_PIN);
+
+      // Pir deteta movimento
+      if (pirState == HIGH) {   
+        rgbLed.setPixelColor(0, rgbLed.Color(255,255,255));
+        rgbLed.show();
+        autoOffTimer = millis();
+      }
+
+      // se deixar de detetar movimento ao final de 2000 ms o led desliga
+      else if (autoOffTimer != 0 && (millis() - autoOffTimer > autoTimeout)) {
+        rgbLed.setPixelColor(0, rgbLed.Color(0,0,0));
+        rgbLed.show();
+        Serial.println("Sem Movimento: LED desligado.");
+        autoOffTimer = 0;
+      }
+
+    } break;
+  }
+}
