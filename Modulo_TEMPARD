@@ -1,7 +1,24 @@
+
 #include <Arduino.h>
 #include <WiFi.h>
 #include <esp_now.h>
 #include <DHT.h>
+
+// --- OLED ---
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+//-----------------
+// --- CONFIGURAÇÃO OLED ---
+#define SCREEN_WIDTH 128 
+#define SCREEN_HEIGHT 64 
+#define OLED_RESET -1
+#define SDA 6
+#define SCL 7
+
+//#define SMOKE_ALERT_THRESHOLD 500
+
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 #define DHTPIN 4
 #define DHTTYPE DHT11
@@ -11,9 +28,9 @@ typedef struct struct_message {
   int mode;
   bool pirState;
   bool ledState;
-  bool buttonPressed; // não usado no chão
   float temperature;
   float humidity;
+  //int smoke;
 } struct_message;
 
 struct_message incomingData;
@@ -32,13 +49,21 @@ void onDataRecv(const esp_now_recv_info_t *recv_info, const uint8_t *data, int l
   }
   Serial.print("LED: "); Serial.println(incomingData.ledState ? "LIGADO":"DESLIGADO");
 
+//  Serial.print("Nivel Fumo : " );
+  //Serial.print(incomingData.smoke);
+ // Serial.println(" ppm");
+  
   // Mostra temperatura e umidade do chão
   float hum = dht.readHumidity();
   float temp = dht.readTemperature();
   if(!isnan(temp) && !isnan(hum)){
     Serial.print("Temperatura : "); Serial.print(temp); Serial.print(" °C  ");
     Serial.print("Humidade : "); Serial.print(hum); Serial.println(" %");
+    updateOLED(temp, hum,true);
+  } else {
+    Serial.println("Falha ao ler o sensor DHT!");
   }
+  
   Serial.println("-------------------------------------------------------");
 }
 
@@ -46,8 +71,115 @@ void onDataSent(const esp_now_send_info_t *send_info, esp_now_send_status_t stat
   // Não usamos envio no chão nesse caso
 }
 
+void drawWifiIcon(bool active) {
+  int x = 120; // posição no canto direito
+  int y = 0;   // altura no topo
+
+  if(active){
+    // WiFi conectado - ondas completas
+    display.fillCircle(x,     y+10, 1, SSD1306_WHITE);
+    display.drawCircle(x,     y+10, 3, SSD1306_WHITE);
+    display.drawCircle(x,     y+10, 5, SSD1306_WHITE);
+    display.drawCircle(x,     y+10, 7, SSD1306_WHITE);
+  } 
+  else {
+    // WiFi desligado - apenas desenho mais fraco
+    display.drawCircle(x,     y+10, 7, SSD1306_WHITE);
+  }
+}
+
+
+void updateOLED(float tempLocal, float humLocal, bool wifiOK) {
+  // 1. Limpa a tela
+  display.clearDisplay();
+  display.setTextColor(SSD1306_WHITE);
+
+  drawWifiIcon(wifiOK);
+
+  // --- 2. TEMPERATURA E HUMIDADE (DESTAQUE - Tamanho 2) ---
+  display.setTextSize(2);
+
+  display.setTextSize(1.5);
+  display.setCursor(40, 0);
+  display.print("TEMPARD");
+  
+  // Rótulos (Tamanho 1)
+  display.setTextSize(1);
+  display.setCursor(5, 7);
+  display.print("TEMP");
+  display.setCursor(90, 7);
+  display.print("HUM");
+
+  // Valores (Tamanho 2)
+  display.setTextSize(2);
+  
+  // Temperatura
+  display.setCursor(5, 25);
+  display.print(tempLocal, 1);
+  display.print((char)247); 
+  display.print("C");
+  
+  // Humidade
+  display.setCursor(85, 25);
+  display.print(humLocal, 0);
+  display.print("%");
+
+  // Linha separadora
+  display.drawFastHLine(0, 45, SCREEN_WIDTH, SSD1306_WHITE);
+
+// --- 3. STATUS DO LED E MODO (SECUNDÁRIO) ---
+
+// Verifica se há alerta de fumo
+  //if (incomingData.smoke > SMOKE_ALERT_THRESHOLD) {
+    // ALERTA DE FUMO
+    //display.setTextSize(1);
+    //display.setCursor(0, 48);
+    //display.print("ALERTA FUMO");
+  //} else {
+  // Nível normal de fumo
+  //display.setTextSize(1);
+  //display.setCursor(0, 48);
+  //display.print("FUMO: ");
+  //display.print(incomingData.smoke);
+//}
+
+// LED e Modo (Secundário)
+display.setTextSize(1);
+display.setCursor(0, 58); // Mudei para baixo para não sobrepor
+display.print("LED:");
+display.print(incomingData.ledState ? " ON" : " OFF");
+
+display.setCursor(65, 58); // Mudei para baixo para não sobrepor
+display.print("Modo:");
+
+switch(incomingData.mode){
+  case 0: display.print(" OFF"); break;
+  case 1: display.print(" ON"); break;
+  case 2: display.print(" AUTO"); break;
+  default: display.print(" ?"); break;
+}
+
+// 4. Exibe as mudanças
+  display.display();
+}
+
 void setup(){
   Serial.begin(115200);
+  
+  Wire.begin(SDA,SCL);
+
+  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { // O endereço I2C mais comum é 0x3C
+    Serial.println(F("ERRO! Não foi encontrado o SSD1306."));
+    // Não retorna para manter o resto do programa a correr
+  } else {
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(SSD1306_WHITE);
+    display.setCursor(0, 0);
+    display.println("Sistema a Iniciar...");
+    display.display();
+  }
+
   dht.begin();
 
   WiFi.mode(WIFI_STA);
@@ -71,4 +203,3 @@ void setup(){
 void loop(){
   delay(2000); // loop apenas para delay de leitura
 }
-
